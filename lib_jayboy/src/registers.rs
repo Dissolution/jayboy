@@ -1,5 +1,3 @@
-use crate::prelude::*;
-
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct Registers {
     /// Accumulator
@@ -27,11 +25,12 @@ pub struct Registers {
     pub pc: u16,
 }
 
+#[allow(unused_imports)] // This _is_ used
 use bitflags::{bitflags, Flags};
 
-///
-/// note: lower 4 bits are unused
 bitflags! {
+    /// CPU Flags
+    /// _note: lower 4 bits are unused_
     #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct CpuFlags: u8 {
         /// zero

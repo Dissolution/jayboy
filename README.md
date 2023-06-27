@@ -1,6 +1,10 @@
 # jayboy
 Another `rust` Game Boy™️ emulator, this time written by me!
 
+#### Notes:
+`CGB` - Color Game Boy
+`SGB` - Super Game Boy (SNES Game Boy player)
+
 
 ## Inspiration
 ##### Videos

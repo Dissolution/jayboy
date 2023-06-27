@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{Memory, Registers, Timer};
 
 #[derive(Debug)]
 pub struct CPU {

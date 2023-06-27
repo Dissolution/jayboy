@@ -1,0 +1,31 @@
+[package]
+name = "jayboy"
+version = "0.0.1"
+authors = ["Timothy Jay <TimothyRJay@gmail.com>"]
+edition = "2021"
+resolver = "2"
+
+[features]
+default = []
+serialize = ["serde"]
+
+[dependencies]
+# logging + timing
+chrono = "0.4.26"
+# flagged enums
+bitflags = "2.3.2"
+# primitive enums
+num_enum = "0.6.1"
+# easy error handling
+anyhow = "1.0.71"
+# Game Boy is little-endian
+byteorder = "1.4.3"
+
+[dependencies.lib_jayboy]
+path = "../lib_jayboy"
+features = ["serialize"]
+
+[dependencies.serde]
+version = "1.0.164"
+features = ["derive"]
+optional = true

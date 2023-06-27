@@ -1,24 +1,12 @@
 #![allow(dead_code, unused)]
 
-pub use crate::prelude::*;
-use std::fs::File;
-use std::io::{BufReader, Read};
-
-mod cpu;
-mod logger;
-mod memory;
-mod opcodes;
-mod prelude;
-mod registers;
-mod roms;
-mod timer;
-mod utils;
+use lib_jayboy::*;
 
 fn main() {
     //display_dmg_rom().expect("WTF");
 
-    let bin_path = "./roms/DMG_ROM.bin";
-    let mut bytes = Roms::load_rom(bin_path).unwrap();
+    let bin_path = "./files/DMG_ROM.bin";
+    let mut bytes = Roms::load_rom_bytes(bin_path).unwrap();
 
     // Create our processor
     let mut cpu = CPU::new();
@@ -33,9 +21,9 @@ fn main() {
     }
 }
 
-fn display_dmg_rom() -> std::io::Result<()> {
-    let bin_path = "./roms/DMG_ROM.bin";
-    let mut bytes = Roms::load_rom(bin_path)?;
+fn display_dmg_rom() -> anyhow::Result<()> {
+    let bin_path = "./files/DMG_ROM.bin";
+    let mut bytes = Roms::load_rom_bytes(bin_path)?;
 
     // Show them!
     println!("Idx:  _u8  0x_");

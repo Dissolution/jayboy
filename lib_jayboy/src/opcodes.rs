@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::CPU;
 
 pub struct OpCode {
     pub value: u8,
@@ -16,5 +16,7 @@ impl OpCode {
         }
     }
 
-    pub fn execute(&self, cpu: &mut CPU) {}
+    pub fn execute(&self, _cpu: &mut CPU) {
+        unimplemented!()
+    }
 }

@@ -1,6 +1,3 @@
-use crate::prelude::*;
-use std::ops::{Range, RangeBounds, RangeInclusive};
-
 #[derive(Debug, Eq, PartialEq)]
 pub struct Memory {
     bytes: Box<[u8]>,
@@ -16,10 +13,13 @@ impl<'m> MemoryArea<'m> {
     pub fn len(&self) -> usize {
         self.memory_area.len()
     }
+    pub fn is_empty(&self) -> bool {
+        self.memory_area.is_empty()
+    }
 
     pub fn get_bit(&self, bit_index: u16) -> bool {
         let byte_offset = bit_index % 8;
-        let bit_flag = (1 << (bit_index / 8));
+        let bit_flag = 1 << (bit_index / 8);
         ((self.memory_area[byte_offset as usize]) & bit_flag) != 0
     }
     // pub fn get_byte(&self, byte_index: u8) -> u8 {}

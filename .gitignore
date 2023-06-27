@@ -11,3 +11,6 @@ target/
 # IntelliJ
 .idea/
 *.iml
+
+# These are 'test' ROMS and should not end up online
+files/

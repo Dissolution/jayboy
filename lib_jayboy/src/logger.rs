@@ -1,6 +1,5 @@
 use chrono::format::{DelayedFormat, StrftimeItems};
 use chrono::*;
-use std::time::Instant;
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum LogLevel {

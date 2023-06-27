@@ -1,17 +1,13 @@
-[package]
-name = "jayboy"
-version = "0.0.1"
-authors = ["Timothy Jay <TimothyRJay@gmail.com>"]
-edition = "2021"
+[workspace]
+resolver = "2"
 
-[dependencies]
-# logging + timing
-chrono = "0.4.26"
-# flagged enums
-bitflags = "2.3.2"
-# primitive enums
-num_enum = "0.6.1"
-# easy error handling
-anyhow = "1.0.71"
-# Game Boy is little-endian
-byteorder = "1.4.3"
+members = [
+    "lib_jayboy",
+    "jayboy"
+]
+
+[profile.dev]
+opt-level = 3
+
+[profile.release]
+debug=true
