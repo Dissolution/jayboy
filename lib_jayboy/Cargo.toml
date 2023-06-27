@@ -21,6 +21,11 @@ anyhow = "1.0.71"
 byteorder = "1.4.3"
 # testing
 rand = "0.8.5"
+# static variables
+lazy_static = "1.4.0"
+# logging
+log = "0.4.19"
+simplelog = "0.12.1"
 
 [dependencies.serde]
 version = "1.0.164"

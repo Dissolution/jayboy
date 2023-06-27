@@ -8,7 +8,7 @@ pub const NINTENDO_LOGO_BYTES: [u8; 48] = [
 ];
 
 pub fn validate_nintendo_logo(cart: &Cartridge) -> anyhow::Result<()> {
-    if cart.nintendo_logo().eq(&NINTENDO_LOGO_BYTES) {
+    if cart.logo_bytes().eq(&NINTENDO_LOGO_BYTES) {
         Ok(())
     } else {
         Err(anyhow!("Invalid Nintendo Logo"))

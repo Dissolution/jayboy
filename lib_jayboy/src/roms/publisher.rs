@@ -208,7 +208,7 @@ impl TryFrom<u8> for Publisher {
             0xF3 => "Extreme Entertainment",
             0xFF => "LJN",
             _ => {
-                return Err(anyhow!("Unknown old licensee"));
+                return Err(anyhow!("Unknown old licensee: 0x{:0<2X}", value));
             }
         };
         Ok(Publisher::create_old(value, name))
@@ -220,13 +220,13 @@ impl TryFrom<[u8; 2]> for Publisher {
 
     fn try_from(value: [u8; 2]) -> Result<Self, Self::Error> {
         if value == [0, 0] {
-            println!("Beta Game: 0x00,0x00 publisher");
-            return Ok(Publisher::NONE);
+            return Err(anyhow!("Unknown new licensee: [0x00,0x00]"));
         }
         // treat value as two ASCII chars
         let str = std::str::from_utf8(&value)?;
         if str.chars().count() != 2 {
-            return Err(anyhow!("Invalid ASCII characters"));
+            panic!("INVALID ASCII");
+            //return Err(anyhow!("Invalid ASCII characters"));
         }
         let l_char = char::from(value[0]);
         let r_char = char::from(value[1]);
@@ -302,7 +302,11 @@ impl TryFrom<[u8; 2]> for Publisher {
             "BB" => "Mindscape",
             "AH" => "? Animal Breeder ?",
             _ => {
-                return Err(anyhow!("Invalid New Licensee chars: {}+{}", l_char, r_char));
+                return Err(anyhow!(
+                    "Invalid New Licensee chars: '{}{}'",
+                    l_char,
+                    r_char
+                ));
             }
         };
         Ok(Publisher::create_new(value[0], value[1], name))

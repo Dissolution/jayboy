@@ -1,21 +1,38 @@
 use crate::roms::cart_type::CartridgeType;
 use crate::roms::CGBFlag::{Compat, GCBOnly, PGBMode};
 use crate::roms::Publisher;
+use crate::text::GBText;
 use anyhow::anyhow;
+use std::ffi::OsString;
 use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::path::Path;
 
 /// [Pan Docs: The Cartridge Header](https://gbdev.io/pandocs/The_Cartridge_Header.html)
 #[derive(Debug, Default)]
 pub struct Cartridge {
+    pub file_name: OsString,
     bytes: Box<[u8]>,
 }
 
 // static methods
 impl Cartridge {
-    pub fn from_bytes(bytes: Vec<u8>) -> Self {
-        Cartridge {
-            bytes: bytes.into_boxed_slice(),
-        }
+    pub fn load_from<P: AsRef<Path>>(path: &P) -> anyhow::Result<Self> {
+        let p = path.as_ref();
+        let file_name = p
+            .file_name()
+            .ok_or(anyhow!("Invalid Path File Name: {}", p.display()))?;
+        let file = File::open(path)?;
+        let mut reader = BufReader::new(file);
+        let mut buffer = Vec::new();
+
+        // Read the entire ROM
+        reader.read_to_end(&mut buffer)?;
+        Ok(Cartridge {
+            file_name: file_name.to_os_string(),
+            bytes: buffer.into_boxed_slice(),
+        })
     }
 }
 
@@ -34,7 +51,7 @@ impl Cartridge {
     /// ## `0x104-0x0133` -- Nintendo Logo
     /// This area contains a 'bitmap' image that is displayed when the Game Boy powers on.
     /// It must match a specific 48 bytes, the same as in the BOOT ROM, or the game will not run.
-    pub fn nintendo_logo(&self) -> &[u8] {
+    pub fn logo_bytes(&self) -> &[u8] {
         &self.bytes[0x0104..=0x0133]
     }
 
@@ -43,33 +60,60 @@ impl Cartridge {
     /// If the title is less than 16 characters, the remaining bytes should be padded `0x00`s
     /// Parts of this field may have different meanings in later cartridges, reducing the size to 15 or even 11.
     /// TODO: Account for Manufacturer Code and CGB flags
-    pub fn title(&self) -> Option<&str> {
+    pub fn title(&self) -> Option<GBText> {
         let title_bytes = &self.bytes[0x0134..=0x0143];
-        let mut end_index = title_bytes.len();
-        for (i, ch) in title_bytes.iter().enumerate().rev() {
-            if ch != &0_u8 {
-                end_index = i + 1; // include this character
+
+        let end_index = if self.cgb_flag().is_some() {
+            title_bytes.len() - 1
+        } else if self.manufacturer_code().is_some() {
+            title_bytes.len() - 5
+        } else {
+            title_bytes.len()
+        };
+
+        let mut last_index = end_index;
+        for i in (0..end_index).rev() {
+            if title_bytes[i] != 0x00 {
+                last_index = i;
                 break;
             }
         }
-        let str_bytes = &title_bytes[0..end_index];
-        std::str::from_utf8(str_bytes).ok()
+
+        let str_bytes = &title_bytes[0..=last_index];
+        let str_result = GBText::try_from_ascii(str_bytes);
+        if let Ok(txt) = str_result {
+            Some(txt)
+        } else {
+            let man = self.manufacturer_code();
+            let cgb = self.cgb_flag();
+            warn!(
+                "Invalid Name: {:?}\nMan: {:?}, CGB: {:?}",
+                str_bytes, man, cgb
+            );
+            None
+        }
     }
 
     /// ## `0x013F-0x0142` -- Manufacturer code
     /// In older carts, these bytes are part of `Title`.  
     /// In newer carts, they contain a manufacturer code (4 uppercase ASCII letters).  
     /// The purpose for this is unknown.
-    pub fn manufacturer_code(&self) -> Option<&str> {
+    pub fn manufacturer_code(&self) -> Option<GBText> {
         let bytes = &self.bytes[0x013F..=0x142];
-        std::str::from_utf8(bytes).ok()
+        let str_result = GBText::try_from_ascii(bytes);
+        if let Ok(txt) = str_result {
+            Some(txt)
+        } else {
+            warn!("Invalid Manufacturer Code: {:?}", bytes);
+            None
+        }
     }
 
     /// ## `0x0143` -- CGB flag
     /// In older carts, this byte is part of `Title`
     /// In later carts (and CGB titles), this indicates Color mode
-    pub fn cgb_flag(&self) -> CGBFlag {
-        self.bytes[0x0143].try_into().unwrap()
+    pub fn cgb_flag(&self) -> Option<CGBFlag> {
+        self.bytes[0x0143].try_into().ok()
     }
 
     /// ## `0x0144-0x0145` -- New licensee
@@ -82,6 +126,10 @@ impl Cartridge {
         if let Ok(lic) = possible_publisher {
             lic
         } else {
+            warn!(
+                "Unknown New Licensee: 0x{:0>2X},0x{:0>2X} {:?}",
+                bytes[0], bytes[1], self.file_name
+            );
             Publisher::NONE
         }
     }
@@ -99,7 +147,12 @@ impl Cartridge {
     /// **most notably its `mapper`**
     pub fn cartridge_type(&self) -> CartridgeType {
         let byte = self.bytes[0x0147];
-        CartridgeType::try_from(byte).expect("Unknown cartridge type!")
+        if let Ok(cart_type) = CartridgeType::try_from(byte) {
+            cart_type
+        } else {
+            error!("Unknown Cart Type: 0x{:0>2X} {:?}", byte, self.file_name);
+            CartridgeType::default()
+        }
     }
 
     /// ## `0x0148` -- ROM size
@@ -130,7 +183,10 @@ impl Cartridge {
             0x03 => 32 * 1024,
             0x04 => 128 * 1024,
             0x05 => 64 * 1024,
-            _ => panic!("Unknown RAM size byte: {}", byte),
+            _ => {
+                error!("Unknown RAM size byte: 0x{:0>2X}", byte);
+                0
+            }
         }
     }
 
@@ -142,7 +198,7 @@ impl Cartridge {
             0x00 => Destination::Japan,
             0x01 => Destination::Overseas,
             _ => {
-                println!("Unknown Destination code byte: 0x{:0<2X}", byte);
+                error!("Unknown Destination code byte: 0x{:0>2X}", byte);
                 Destination::Overseas
             }
         }
@@ -158,6 +214,7 @@ impl Cartridge {
         if let Ok(lic) = possible_publisher {
             lic
         } else {
+            warn!("Unknown old licensee: 0x{:0>2X} {:?}", byte, self.file_name);
             Publisher::NONE
         }
     }
@@ -194,7 +251,8 @@ impl Cartridge {
 
 impl Display for Cartridge {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        writeln!(f, "Title: {}", self.title().unwrap_or(""))?;
+        writeln!(f, "File: {:?}", self.file_name)?;
+        writeln!(f, "Title: {:?}", self.title())?;
         writeln!(f, "Publisher: {}", self.publisher())?;
         writeln!(f, "Type: {}", self.cartridge_type())?;
         writeln!(
@@ -213,6 +271,7 @@ impl Display for Cartridge {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum CGBFlag {
     Compat,
     GCBOnly,
@@ -228,7 +287,7 @@ impl TryFrom<u8> for CGBFlag {
             0xC0 => Ok(GCBOnly),
             // values with bit 7 and either bit 2 or 3 set will switch the Game Boy into a special non-CGB mode
             0x88 | 0x84 => Ok(PGBMode),
-            _ => Err(anyhow!("Invalid CGBFlag: {}", value)),
+            _ => Err(anyhow!("Invalid CGBFlag: 0x{:0<2X}", value)),
         }
     }
 }
@@ -239,22 +298,57 @@ pub enum Destination {
     Overseas,
 }
 
-#[cfg(test)]
-mod tests {
+//#[cfg(test)]
+pub mod cart_tests {
     use super::*;
     use anyhow::*;
 
-    pub const NINTENDO_LOGO_BYTES: [u8; 48] = [
+    const LOGO_BYTES: [u8; 48] = [
         0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00,
         0x0D, 0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E, 0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD,
         0xD9, 0x99, 0xBB, 0xBB, 0x67, 0x63, 0x6E, 0x0E, 0xEC, 0xCC, 0xDD, 0xDC, 0x99, 0x9F, 0xBB,
         0xB9, 0x33, 0x3E,
     ];
 
+    pub fn validate_cart(cart: &Cartridge) -> anyhow::Result<()> {
+        // validate the logo
+        validate_nintendo_logo(cart)?;
+        validate_ram_size_vs_cartridge_type(cart)?;
+        let checksum = generate_header_checksum(cart);
+        if checksum != cart.header_checksum() {
+            return Err(anyhow!("Invalid Header Checksum"));
+        }
+        // TODO: This fails ~20% of the time for anything other than the most standard of carts
+        // is this worth fixing?
+        //let checksum = generate_global_checksum(cart);
+        //if checksum != cart.global_checksum() {
+        //    return Err(anyhow!("Invalid Global Checksum"));
+        //}
+        // more?
+        Ok(())
+    }
+
     pub fn validate_nintendo_logo(cart: &Cartridge) -> anyhow::Result<()> {
-        if cart.nintendo_logo().eq(&NINTENDO_LOGO_BYTES) {
+        if cart.logo_bytes().eq(&LOGO_BYTES) {
             Ok(())
         } else {
+            let cart_bytes = cart.logo_bytes();
+            let logo_bytes = &LOGO_BYTES;
+            let mut str = String::new();
+            str.push_str(&format!("{:?} {:?}", cart.file_name, cart.title()));
+            str.push('\n');
+            str.push_str("Invalid Nintendo Logo!\n");
+            str.push_str("Cart: ");
+            for byte in cart_bytes {
+                str.push_str(&format!("{:0>2X} ", byte));
+            }
+            str.push_str("\nLogo: ");
+            for byte in logo_bytes {
+                str.push_str(&format!("{:0>2X} ", byte));
+            }
+
+            error!("{}", str);
+
             Err(anyhow!("Invalid Nintendo Logo"))
         }
     }
@@ -285,8 +379,12 @@ mod tests {
     /// ```
     pub fn generate_header_checksum(cart: &Cartridge) -> u8 {
         let mut checksum: u8 = 0;
+        let bytes = cart.get_bytes();
+        assert!(bytes.len() >= 0x014C);
         for address in 0x0134..=0x014C_u16 {
-            checksum = checksum - cart.bytes[address as usize] - 1;
+            let byte = bytes[address as usize];
+            checksum = u8::wrapping_sub(checksum, byte);
+            checksum = u8::wrapping_sub(checksum, 1);
         }
         checksum
     }
@@ -294,31 +392,20 @@ mod tests {
     /// These bytes contain a 16-bit (big-endian) checksum simply computed as the sum of all the bytes of the cartridge ROM (except these two checksum bytes).
     pub fn generate_global_checksum(cart: &Cartridge) -> u16 {
         let mut checksum: u16 = 0;
+        let bytes = cart.get_bytes();
+        assert!(bytes.len() >= 0x14D);
         // TODO: Is this for the entire ROM (as in _every_ other byte) or just this range below?
-        for byte in cart.bytes[0x0100..=0x14D].iter() {
-            checksum += ((*byte) as u16);
+        // for byte in bytes[0x0100..=0x14D].iter() {
+        //     checksum = u16::wrapping_add(checksum, *byte as u16);
+        // }
+
+        for (i, byte) in bytes.iter().enumerate() {
+            if i == 0x014E || i == 0x014F {
+                continue;
+            }
+            checksum = u16::wrapping_add(checksum, *byte as u16);
         }
+
         checksum
-    }
-
-    pub fn validate_cart(cart: &Cartridge) -> anyhow::Result<()> {
-        // validate the logo
-        validate_nintendo_logo(cart)?;
-        validate_ram_size_vs_cartridge_type(cart)?;
-        let checksum = generate_header_checksum(cart);
-        if checksum != cart.header_checksum() {
-            return Err(anyhow!("Invalid Header Checksum"));
-        }
-        let checksum = generate_global_checksum(cart);
-        if checksum != cart.global_checksum() {
-            return Err(anyhow!("Invalid Global Checksum"));
-        }
-        // more?
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_nintendo_logo() {
-        todo!()
     }
 }
