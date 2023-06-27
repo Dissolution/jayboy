@@ -12,6 +12,9 @@ fn get_rom_files() -> Vec<PathBuf> {
         .filter_map(|r| r.ok())
         .map(|de| de.path())
         .filter(|p| {
+            if p.starts_with("[BIOS]") {
+                return false;
+            }
             if let Some(ext) = p.extension() {
                 ext == "gb" // .gb is the extension for Game Boy rom files
             } else {
@@ -20,6 +23,20 @@ fn get_rom_files() -> Vec<PathBuf> {
         })
         .collect();
     gb_rom_paths
+}
+
+#[test]
+pub fn test_one_rom() {
+    let file = r"c:\gb_roms\Tetris (Japan) (En).gb";
+    println!("Testing {:?}", file);
+    let load_cart = Roms::load_cartridge(file);
+    println!("Loaded: {:?}", load_cart);
+    if let Ok(cart) = load_cart {
+        println!("Loaded Cart {}", cart.title());
+        let tests = cart_tests::validate_cart(&cart);
+        println!("Cart Tests: {:?}", tests);
+        println!("DEBUG");
+    }
 }
 
 #[test]

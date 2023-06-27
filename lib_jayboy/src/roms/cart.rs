@@ -2,6 +2,7 @@ use crate::roms::cart_type::CartridgeType;
 use crate::roms::CGBFlag::{Compat, GCBOnly, PGBMode};
 use crate::roms::Publisher;
 use anyhow::anyhow;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 /// [Pan Docs: The Cartridge Header](https://gbdev.io/pandocs/The_Cartridge_Header.html)
 #[derive(Debug, Default)]
@@ -42,7 +43,7 @@ impl Cartridge {
     /// If the title is less than 16 characters, the remaining bytes should be padded `0x00`s
     /// Parts of this field may have different meanings in later cartridges, reducing the size to 15 or even 11.
     /// TODO: Account for Manufacturer Code and CGB flags
-    pub fn title(&self) -> &str {
+    pub fn title(&self) -> Option<&str> {
         let title_bytes = &self.bytes[0x0134..=0x0143];
         let mut end_index = title_bytes.len();
         for (i, ch) in title_bytes.iter().enumerate().rev() {
@@ -52,7 +53,7 @@ impl Cartridge {
             }
         }
         let str_bytes = &title_bytes[0..end_index];
-        std::str::from_utf8(str_bytes).expect("Invalid Title bytes")
+        std::str::from_utf8(str_bytes).ok()
     }
 
     /// ## `0x013F-0x0142` -- Manufacturer code
@@ -77,7 +78,12 @@ impl Cartridge {
     /// otherwise the `old_licensee` must be considered.
     pub fn new_licensee(&self) -> Publisher {
         let bytes = [self.bytes[0x0144], self.bytes[0x145]];
-        Publisher::try_from(bytes).unwrap_or(Publisher::NONE)
+        let possible_publisher = Publisher::try_from(bytes);
+        if let Ok(lic) = possible_publisher {
+            lic
+        } else {
+            Publisher::NONE
+        }
     }
 
     /// ## `0x0146` -- SGB flag
@@ -135,7 +141,10 @@ impl Cartridge {
         match byte {
             0x00 => Destination::Japan,
             0x01 => Destination::Overseas,
-            _ => panic!("Unknown Destination code byte: {}", byte),
+            _ => {
+                println!("Unknown Destination code byte: 0x{:0<2X}", byte);
+                Destination::Overseas
+            }
         }
     }
 
@@ -145,7 +154,12 @@ impl Cartridge {
     /// **Note: The SGB will ignore any command packets unless this value is `0x33`**
     pub fn old_licensee(&self) -> Publisher {
         let byte = self.bytes[0x014B];
-        Publisher::try_from(byte).unwrap_or(Publisher::NONE)
+        let possible_publisher = Publisher::try_from(byte);
+        if let Ok(lic) = possible_publisher {
+            lic
+        } else {
+            Publisher::NONE
+        }
     }
 
     /// ## `0x014C` -- Mask ROM version number
@@ -166,6 +180,36 @@ impl Cartridge {
     /// A 16-bit (big-endian) checksum computed from all the bytes in the Cartridge ROM (except these two bytes)
     pub fn global_checksum(&self) -> u16 {
         u16::from_be_bytes([self.bytes[0x14E], self.bytes[0x14F]])
+    }
+
+    pub fn publisher(&self) -> Publisher {
+        let old_byte = self.bytes[0x014B];
+        if old_byte == 0x33_u8 {
+            self.new_licensee()
+        } else {
+            self.old_licensee()
+        }
+    }
+}
+
+impl Display for Cartridge {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        writeln!(f, "Title: {}", self.title().unwrap_or(""))?;
+        writeln!(f, "Publisher: {}", self.publisher())?;
+        writeln!(f, "Type: {}", self.cartridge_type())?;
+        writeln!(
+            f,
+            "ROM: {} KiB,  RAM: {} KiB",
+            self.rom_size() / 1024,
+            self.ram_size() / 1024
+        )?;
+        writeln!(
+            f,
+            "Dest: {:?},  Version: {}",
+            self.destination(),
+            self.version()
+        )?;
+        Ok(())
     }
 }
 
@@ -189,6 +233,7 @@ impl TryFrom<u8> for CGBFlag {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum Destination {
     Japan,
     Overseas,

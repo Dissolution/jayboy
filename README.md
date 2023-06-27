@@ -17,6 +17,7 @@ Another `rust` Game Boy™️ emulator, this time written by me!
 - [DMG-01: How to Emulate a Game Boy](https://rylev.github.io/DMG-01/public/book/)
 - [Game Boy: Complete Technical Reference](https://gekkio.fi/files/gb-docs/gbctr.pdf)
 - [IronBoy](https://nicolas-siplis.com/ironboy/)
+- [Game Boy Opcodes](https://meganesulli.com/blog/game-boy-opcodes/)
 
 ##### Projects
 - [RBoy](https://github.com/mvdnes/rboy) -- A Game Boy Color Emulator written in Rust

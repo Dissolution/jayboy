@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct CartridgeType {
@@ -11,10 +12,53 @@ pub struct CartridgeType {
     pub rumble: bool,
     pub sensor: bool,
     pub camera: bool,
-    pub bandai_tama5: bool,
+    pub tamagochi: bool,
     pub huc: u8,
+    pub bootleg: bool,
 }
 impl CartridgeType {}
+
+impl Display for CartridgeType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        if self.bootleg {
+            return write!(f, "BOOTLEG");
+        }
+
+        write!(f, "MBC{}", self.mbc)?;
+        if self.ram {
+            write!(f, "+RAM")?;
+        }
+        if self.battery {
+            write!(f, "+BATTERY")?;
+        }
+        if self.rom {
+            write!(f, "+ROM")?;
+        }
+        if self.mmm01 {
+            write!(f, "+MMM01")?;
+        }
+        if self.timer {
+            write!(f, "+TIMER")?;
+        }
+        if self.rumble {
+            write!(f, "+RUMBLE")?;
+        }
+        if self.sensor {
+            write!(f, "+SENSOR")?;
+        }
+        if self.camera {
+            write!(f, "+CAMERA")?;
+        }
+        if self.tamagochi {
+            write!(f, "+TAMAGOCHI")?;
+        }
+        if self.huc > 0 {
+            write!(f, "+HUC{}", self.huc)?;
+        }
+
+        FmtResult::Ok(())
+    }
+}
 
 impl TryFrom<u8> for CartridgeType {
     type Error = anyhow::Error;
@@ -166,7 +210,7 @@ impl TryFrom<u8> for CartridgeType {
                 ..Default::default()
             }),
             0xFD => Ok(CartridgeType {
-                bandai_tama5: true,
+                tamagochi: true,
                 ..Default::default()
             }),
             0xFE => Ok(CartridgeType {
@@ -179,7 +223,13 @@ impl TryFrom<u8> for CartridgeType {
                 battery: true,
                 ..Default::default()
             }),
-            _ => Err(anyhow!("Unknown cartridge type: {}", value)),
+            _ => {
+                println!("Weird cart type!");
+                Ok(CartridgeType {
+                    bootleg: true,
+                    ..Default::default()
+                })
+            }
         }
     }
 }

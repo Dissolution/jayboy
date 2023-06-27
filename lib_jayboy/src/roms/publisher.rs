@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Publisher {
@@ -26,6 +27,19 @@ impl Publisher {
             old_code: 0x33,
             new_code: [new_code_left, new_code_right],
             name,
+        }
+    }
+
+    fn new_code_str(&self) -> &str {
+        std::str::from_utf8(&self.new_code).unwrap()
+    }
+}
+impl Display for Publisher {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        if self.old_code == 0x33 {
+            write!(f, "{} {}", self.new_code_str(), self.name)
+        } else {
+            write!(f, "0x{:0>2X} {}", self.old_code, self.name)
         }
     }
 }
@@ -206,8 +220,7 @@ impl TryFrom<[u8; 2]> for Publisher {
 
     fn try_from(value: [u8; 2]) -> Result<Self, Self::Error> {
         if value == [0, 0] {
-            // DEBUG THIS
-            assert_eq!(1, 2);
+            println!("Beta Game: 0x00,0x00 publisher");
             return Ok(Publisher::NONE);
         }
         // treat value as two ASCII chars
@@ -215,6 +228,9 @@ impl TryFrom<[u8; 2]> for Publisher {
         if str.chars().count() != 2 {
             return Err(anyhow!("Invalid ASCII characters"));
         }
+        let l_char = char::from(value[0]);
+        let r_char = char::from(value[1]);
+
         if str == "00" {
             return Ok(Publisher::NONE);
         }
@@ -280,8 +296,13 @@ impl TryFrom<[u8; 2]> for Publisher {
             "97" => "Kaneko",
             "99" => "Pack in soft",
             "A4" => "Konami (Yu-Gi-Oh!)",
+            // Below added as guesses
+            "5G" => "? 10PinBowling ?",
+            "DA" => "TOMY",
+            "BB" => "Mindscape",
+            "AH" => "? Animal Breeder ?",
             _ => {
-                return Err(anyhow!("Invalid New Licensee chars: {}", str));
+                return Err(anyhow!("Invalid New Licensee chars: {}+{}", l_char, r_char));
             }
         };
         Ok(Publisher::create_new(value[0], value[1], name))

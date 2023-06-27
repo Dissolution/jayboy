@@ -19,6 +19,8 @@ num_enum = "0.6.1"
 anyhow = "1.0.71"
 # Game Boy is little-endian
 byteorder = "1.4.3"
+# testing
+rand = "0.8.5"
 
 [dependencies.serde]
 version = "1.0.164"
