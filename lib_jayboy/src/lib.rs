@@ -10,8 +10,8 @@ mod memory;
 mod opcodes;
 mod registers;
 mod roms;
-mod text;
 mod timer;
+mod native;
 
 pub use cpu::*;
 pub use memory::*;
@@ -19,3 +19,4 @@ pub use opcodes::*;
 pub use registers::*;
 pub use roms::*;
 pub use timer::*;
+pub use native::*;

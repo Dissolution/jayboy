@@ -1,4 +1,3 @@
-use crate::Cartridge;
 use anyhow::anyhow;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 

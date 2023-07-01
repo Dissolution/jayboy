@@ -1,9 +1,8 @@
-use crate::roms::cart_type::CartridgeType;
-use crate::roms::CGBFlag::{Compat, GCBOnly, PGBMode};
-use crate::roms::Publisher;
-use crate::text::GBText;
-use anyhow::anyhow;
-use std::ffi::OsString;
+use crate::native::{GBText, GByte};
+use crate::roms::Licensee;
+use crate::roms::*;
+use anyhow::{anyhow, Result};
+use std::ffi::OsStr;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -12,17 +11,18 @@ use std::path::Path;
 /// [Pan Docs: The Cartridge Header](https://gbdev.io/pandocs/The_Cartridge_Header.html)
 #[derive(Debug, Default)]
 pub struct Cartridge {
-    pub file_name: OsString,
-    bytes: Box<[u8]>,
+    pub name: Box<OsStr>,
+    pub bytes: Box<[u8]>,
 }
 
 // static methods
 impl Cartridge {
-    pub fn load_from<P: AsRef<Path>>(path: &P) -> anyhow::Result<Self> {
-        let p = path.as_ref();
-        let file_name = p
+    /// Attempts to load a `Cartridge` from a local Path
+    pub fn load_from<P: AsRef<Path>>(path: &P) -> Result<Self> {
+        let path = path.as_ref();
+        let file_name = path
             .file_name()
-            .ok_or(anyhow!("Invalid Path File Name: {}", p.display()))?;
+            .ok_or(anyhow!("Invalid Path File Name: {}", path.display()))?;
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
         let mut buffer = Vec::new();
@@ -30,7 +30,7 @@ impl Cartridge {
         // Read the entire ROM
         reader.read_to_end(&mut buffer)?;
         Ok(Cartridge {
-            file_name: file_name.to_os_string(),
+            name: file_name.into(),
             bytes: buffer.into_boxed_slice(),
         })
     }
@@ -38,17 +38,14 @@ impl Cartridge {
 
 // instance methods
 impl Cartridge {
-    pub fn get_bytes(&self) -> &[u8] {
-        self.bytes.as_ref()
-    }
-
     /// ## `0x0100-0x0103` -- Entry Point
-    /// After executing the boot ROM, the Game Boy will start executing the `Cartridge` at position `0x100`
+    /// After executing the boot ROM, the Game Boy will start executing at position `0x0100`
     pub fn entry_point(&self) -> &[u8] {
         &self.bytes[0x0100..=0x0103]
     }
 
-    /// ## `0x104-0x0133` -- Nintendo Logo
+    
+    /// ## `0x0104-0x0133` -- Nintendo Logo
     /// This area contains a 'bitmap' image that is displayed when the Game Boy powers on.
     /// It must match a specific 48 bytes, the same as in the BOOT ROM, or the game will not run.
     pub fn logo_bytes(&self) -> &[u8] {
@@ -57,40 +54,42 @@ impl Cartridge {
 
     /// ## `0x0134-0x0143` -- Title
     /// These bytes contain the game's name in ASCII.  
-    /// If the title is less than 16 characters, the remaining bytes should be padded `0x00`s
-    /// Parts of this field may have different meanings in later cartridges, reducing the size to 15 or even 11.
-    /// TODO: Account for Manufacturer Code and CGB flags
+    /// If the title is less than 16 characters, the remaining bytes should be empty padding bytes (`0x00`)  
+    /// Parts of this field may have different meanings in later cartridges, reducing the size to 15 or even 11 bytes.
     pub fn title(&self) -> Option<GBText> {
+        // calculate title length
+
+        let title_length = if self.manufacturer_code().is_some() {
+            // First, check for manufacturer, it limits our size the most
+            11
+        } else if CGBFlag::not_none(self.bytes[0x0143]) {
+            // check last byte for CGBFlag
+            15
+        } else {
+            // default to the full 16
+            16
+        };
+        // Total range we might use
         let title_bytes = &self.bytes[0x0134..=0x0143];
 
-        let end_index = if self.cgb_flag().is_some() {
-            title_bytes.len() - 1
-        } else if self.manufacturer_code().is_some() {
-            title_bytes.len() - 5
-        } else {
-            title_bytes.len()
-        };
-
-        let mut last_index = end_index;
-        for i in (0..end_index).rev() {
-            if title_bytes[i] != 0x00 {
-                last_index = i;
-                break;
-            }
-        }
+        // scan from end to front until we find a non-empty byte
+        let last_index = (0..title_length)
+            .rposition(|i| title_bytes[i] != 0x00)
+            .unwrap_or(16);
 
         let str_bytes = &title_bytes[0..=last_index];
-        let str_result = GBText::try_from_ascii(str_bytes);
-        if let Ok(txt) = str_result {
-            Some(txt)
-        } else {
-            let man = self.manufacturer_code();
-            let cgb = self.cgb_flag();
-            warn!(
-                "Invalid Name: {:?}\nMan: {:?}, CGB: {:?}",
-                str_bytes, man, cgb
-            );
-            None
+        let str_result = GBText::from_ascii(str_bytes);
+        match str_result {
+            Ok(text) => Some(text),
+            Err(ex) => {
+                let man = self.manufacturer_code();
+                let cgb = self.cgb_flag();
+                warn!(
+                    "{}: Invalid Name Bytes '{:?}'\nMan: {:?}, CGB: {:?}",
+                    ex, str_bytes, man, cgb
+                );
+                None
+            }
         }
     }
 
@@ -100,12 +99,13 @@ impl Cartridge {
     /// The purpose for this is unknown.
     pub fn manufacturer_code(&self) -> Option<GBText> {
         let bytes = &self.bytes[0x013F..=0x142];
-        let str_result = GBText::try_from_ascii(bytes);
-        if let Ok(txt) = str_result {
-            Some(txt)
-        } else {
-            warn!("Invalid Manufacturer Code: {:?}", bytes);
-            None
+        let str_result = GBText::from_uppercase_ascii(bytes);
+        match str_result {
+            Ok(text) => Some(text),
+            Err(ex) => {
+                warn!("{}: Invalid Manufacturer Code '{:?}'", ex, bytes);
+                None
+            }
         }
     }
 
@@ -119,27 +119,36 @@ impl Cartridge {
     /// ## `0x0144-0x0145` -- New licensee
     /// Indicates the game's publishers.  
     /// Only relevant if `old_licensee` is 0x33 (true for all games after the CGB was released),
-    /// otherwise the `old_licensee` must be considered.
-    pub fn new_licensee(&self) -> Publisher {
+    /// otherwise the `old_licensee` must be considered.  
+    /// See `&self.licensee()` for a method that can return a New or Old Licensee
+    pub fn new_licensee(&self) -> Option<Licensee> {
         let bytes = [self.bytes[0x0144], self.bytes[0x145]];
-        let possible_publisher = Publisher::try_from(bytes);
-        if let Ok(lic) = possible_publisher {
-            lic
+        let licensee = Licensee::try_from(bytes);
+        if let Ok(licensee) = licensee {
+            Some(licensee)
         } else {
-            warn!(
-                "Unknown New Licensee: 0x{:0>2X},0x{:0>2X} {:?}",
-                bytes[0], bytes[1], self.file_name
-            );
-            Publisher::NONE
+            // warn!(
+            //     "Unknown New Licensee: 0x{:0>2X},0x{:0>2X} {:?}",
+            //     bytes[0], bytes[1], self.file_name
+            // );
+            None
         }
     }
 
     /// ## `0x0146` -- SGB flag
     /// This byte specifies whether the game supports SGB functions.
-    /// The SGB will ignore any `command packets` if this byte is set to a value other than `0x03`
-    /// (typically `0x00`)
+    /// The SGB will ignore any `command packets` unless this is `true`
     pub fn sgb_support(&self) -> bool {
-        self.bytes[0x0146] == 0x03
+        // any value other than 0x03, usually 0x00
+        let byte = self.bytes[0x0146];
+        match byte {
+            0x03 => true,
+            0x00 => false,
+            _ => {
+                info!("Non-typical SGB support byte: {}", GByte::from(byte));
+                false
+            }
+        }
     }
 
     /// ## `0x0147` -- Cartridge type
@@ -150,8 +159,9 @@ impl Cartridge {
         if let Ok(cart_type) = CartridgeType::try_from(byte) {
             cart_type
         } else {
-            error!("Unknown Cart Type: 0x{:0>2X} {:?}", byte, self.file_name);
-            CartridgeType::default()
+            error!("Unknown Cart Type: {} {:?}", GByte::from(byte), self.name);
+            //CartridgeType::default()
+            panic!("UNKNOWN CART TYPE")
         }
     }
 
@@ -166,7 +176,7 @@ impl Cartridge {
             0x52 => (1024 + 128) * 1024,
             0x53 => (1024 + 256) * 1024,
             0x54 => (1024 + 512) * 1024,
-            _ => panic!("Unknown ROM size byte: {}", byte),
+            _ => panic!("Unknown ROM size byte: {}", GByte::from(byte)),
         }
     }
 
@@ -184,7 +194,7 @@ impl Cartridge {
             0x04 => 128 * 1024,
             0x05 => 64 * 1024,
             _ => {
-                error!("Unknown RAM size byte: 0x{:0>2X}", byte);
+                error!("Unknown RAM size byte: {}", GByte::from(byte));
                 0
             }
         }
@@ -198,7 +208,7 @@ impl Cartridge {
             0x00 => Destination::Japan,
             0x01 => Destination::Overseas,
             _ => {
-                error!("Unknown Destination code byte: 0x{:0>2X}", byte);
+                error!("Unknown Destination code byte: {}", GByte::from(byte));
                 Destination::Overseas
             }
         }
@@ -207,15 +217,16 @@ impl Cartridge {
     /// ## `0x014B` -- Old licensee
     /// This byte is used in older (pre-SGB) carts to specify the game’s publisher.  
     /// However, the value `0x33` indicates that the `new_licensee` must be considered instead.
-    /// **Note: The SGB will ignore any command packets unless this value is `0x33`**
-    pub fn old_licensee(&self) -> Publisher {
+    /// **Note: The SGB will ignore any command packets unless this value is `0x33`**  
+    /// See `&self.licensee()` for a method that can return a New or Old Licensee
+    pub fn old_licensee(&self) -> Option<Licensee> {
         let byte = self.bytes[0x014B];
-        let possible_publisher = Publisher::try_from(byte);
-        if let Ok(lic) = possible_publisher {
-            lic
+        let licensee = Licensee::try_from(byte);
+        if let Ok(licensee) = licensee {
+            Some(licensee)
         } else {
-            warn!("Unknown old licensee: 0x{:0>2X} {:?}", byte, self.file_name);
-            Publisher::NONE
+            warn!("Unknown old licensee: 0x{:0>2X} {:?}", byte, self.name);
+            None
         }
     }
 
@@ -223,7 +234,13 @@ impl Cartridge {
     /// Specifies the version number of the game.  
     /// It is usually `0x00`
     pub fn version(&self) -> u8 {
-        self.bytes[0x014C]
+        match self.bytes[0x014C] {
+            0x00 => 0x00,
+            def => {
+                info!("Non-0 Version!");
+                def
+            }
+        }
     }
 
     /// ## `0x14D` -- Header checksum
@@ -239,21 +256,21 @@ impl Cartridge {
         u16::from_be_bytes([self.bytes[0x14E], self.bytes[0x14F]])
     }
 
-    pub fn publisher(&self) -> Publisher {
+    pub fn licensee(&self) -> Licensee {
         let old_byte = self.bytes[0x014B];
         if old_byte == 0x33_u8 {
-            self.new_licensee()
+            self.new_licensee().unwrap()
         } else {
-            self.old_licensee()
+            self.old_licensee().unwrap()
         }
     }
 }
 
 impl Display for Cartridge {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        writeln!(f, "File: {:?}", self.file_name)?;
+        writeln!(f, "File: {:?}", self.name)?;
         writeln!(f, "Title: {:?}", self.title())?;
-        writeln!(f, "Publisher: {}", self.publisher())?;
+        writeln!(f, "Publisher: {}", self.licensee())?;
         writeln!(f, "Type: {}", self.cartridge_type())?;
         writeln!(
             f,
@@ -268,27 +285,6 @@ impl Display for Cartridge {
             self.version()
         )?;
         Ok(())
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum CGBFlag {
-    Compat,
-    GCBOnly,
-    PGBMode,
-}
-impl TryFrom<u8> for CGBFlag {
-    type Error = anyhow::Error;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0x80 => Ok(Compat),
-            // The hardware ignores bit 6, so this is functionally the same as `Compat`
-            0xC0 => Ok(GCBOnly),
-            // values with bit 7 and either bit 2 or 3 set will switch the Game Boy into a special non-CGB mode
-            0x88 | 0x84 => Ok(PGBMode),
-            _ => Err(anyhow!("Invalid CGBFlag: 0x{:0<2X}", value)),
-        }
     }
 }
 
@@ -310,7 +306,7 @@ pub mod cart_tests {
         0xB9, 0x33, 0x3E,
     ];
 
-    pub fn validate_cart(cart: &Cartridge) -> anyhow::Result<()> {
+    pub fn validate_cart(cart: &Cartridge) -> Result<()> {
         // validate the logo
         validate_nintendo_logo(cart)?;
         validate_ram_size_vs_cartridge_type(cart)?;
@@ -328,14 +324,14 @@ pub mod cart_tests {
         Ok(())
     }
 
-    pub fn validate_nintendo_logo(cart: &Cartridge) -> anyhow::Result<()> {
+    pub fn validate_nintendo_logo(cart: &Cartridge) -> Result<()> {
         if cart.logo_bytes().eq(&LOGO_BYTES) {
             Ok(())
         } else {
             let cart_bytes = cart.logo_bytes();
             let logo_bytes = &LOGO_BYTES;
             let mut str = String::new();
-            str.push_str(&format!("{:?} {:?}", cart.file_name, cart.title()));
+            str.push_str(&format!("{:?} {:?}", cart.name, cart.title()));
             str.push('\n');
             str.push_str("Invalid Nintendo Logo!\n");
             str.push_str("Cart: ");
@@ -353,7 +349,7 @@ pub mod cart_tests {
         }
     }
 
-    pub fn validate_ram_size_vs_cartridge_type(cart: &Cartridge) -> anyhow::Result<()> {
+    pub fn validate_ram_size_vs_cartridge_type(cart: &Cartridge) -> Result<()> {
         // If the cartridge type does not include “RAM” in its name, this should be set to 0.
         // This includes MBC2, since its 512 × 4 bits of memory are built directly into the mapper.
         let has_ram = cart.cartridge_type().ram;
@@ -379,7 +375,7 @@ pub mod cart_tests {
     /// ```
     pub fn generate_header_checksum(cart: &Cartridge) -> u8 {
         let mut checksum: u8 = 0;
-        let bytes = cart.get_bytes();
+        let bytes = cart.bytes.as_ref();
         assert!(bytes.len() >= 0x014C);
         for address in 0x0134..=0x014C_u16 {
             let byte = bytes[address as usize];
@@ -392,7 +388,7 @@ pub mod cart_tests {
     /// These bytes contain a 16-bit (big-endian) checksum simply computed as the sum of all the bytes of the cartridge ROM (except these two checksum bytes).
     pub fn generate_global_checksum(cart: &Cartridge) -> u16 {
         let mut checksum: u16 = 0;
-        let bytes = cart.get_bytes();
+        let bytes = cart.bytes.as_ref();
         assert!(bytes.len() >= 0x14D);
         // TODO: Is this for the entire ROM (as in _every_ other byte) or just this range below?
         // for byte in bytes[0x0100..=0x14D].iter() {

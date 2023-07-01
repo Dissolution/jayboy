@@ -1,7 +1,10 @@
-mod cart;
 mod cart_type;
-mod publisher;
+mod cartridge;
+mod cgbflag;
+mod licensee;
+mod scratch;
 
-pub use cart::*;
 pub use cart_type::*;
-pub use publisher::*;
+pub use cartridge::*;
+pub use cgbflag::*;
+pub use licensee::*;

@@ -2,63 +2,42 @@ use anyhow::anyhow;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Publisher {
-    pub old_code: u8,
-    pub new_code: [u8; 2],
+pub struct Licensee {
     pub name: &'static str,
+    pub code: LicenseeCode,
 }
 
-impl Publisher {
-    pub const NONE: Publisher = Publisher {
-        old_code: 0x00,
-        new_code: [b'0', b'0'],
-        name: "None",
-    };
-
-    const fn create_old(old_code: u8, name: &'static str) -> Self {
-        Publisher {
-            old_code,
-            new_code: [0x00, 0x00],
-            name,
-        }
-    }
-    const fn create_new(new_code_left: u8, new_code_right: u8, name: &'static str) -> Self {
-        Publisher {
-            old_code: 0x33,
-            new_code: [new_code_left, new_code_right],
-            name,
-        }
-    }
-
-    fn new_code_str(&self) -> &str {
-        std::str::from_utf8(&self.new_code).unwrap()
-    }
+#[derive(Debug, Eq, PartialEq)]
+pub enum LicenseeCode {
+    Old(u8),
+    New(u8, u8),
 }
-impl Display for Publisher {
+impl Display for Licensee {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        if self.old_code == 0x33 {
-            write!(f, "{} {}", self.new_code_str(), self.name)
-        } else {
-            write!(f, "0x{:0>2X} {}", self.old_code, self.name)
+        match self.code {
+            LicenseeCode::Old(byte) => {
+                write!(f, "0x{:0<2X}: {}", byte, self.name)
+            }
+            LicenseeCode::New(lbyte, rbyte) => {
+                write!(
+                    f,
+                    "'{}{}': {}",
+                    char::from(lbyte),
+                    char::from(rbyte),
+                    self.name
+                )
+            }
         }
     }
 }
 
-impl Default for Publisher {
-    fn default() -> Self {
-        Publisher::NONE
-    }
-}
-
-impl TryFrom<u8> for Publisher {
+/// Try to convert a `u8` byte into an Old Licensee
+impl TryFrom<u8> for Licensee {
     type Error = anyhow::Error;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        if value == 0x00 {
-            return Ok(Publisher::NONE);
-        }
         let name = match value {
-            //0x00 => "None",
+            0x00 => "None",
             0x01 => "Nintendo",
             0x08 => "Capcom",
             0x09 => "Hot-B",
@@ -211,11 +190,14 @@ impl TryFrom<u8> for Publisher {
                 return Err(anyhow!("Unknown old licensee: 0x{:0<2X}", value));
             }
         };
-        Ok(Publisher::create_old(value, name))
+        Ok(Licensee {
+            name,
+            code: LicenseeCode::Old(value),
+        })
     }
 }
 
-impl TryFrom<[u8; 2]> for Publisher {
+impl TryFrom<[u8; 2]> for Licensee {
     type Error = anyhow::Error;
 
     fn try_from(value: [u8; 2]) -> Result<Self, Self::Error> {
@@ -231,11 +213,8 @@ impl TryFrom<[u8; 2]> for Publisher {
         let l_char = char::from(value[0]);
         let r_char = char::from(value[1]);
 
-        if str == "00" {
-            return Ok(Publisher::NONE);
-        }
         let name = match str {
-            //"00" => "None",
+            "00" => "None",
             "01" => "Nintendo R&D1",
             "08" => "Capcom",
             "13" => "Electronic Arts",
@@ -309,6 +288,9 @@ impl TryFrom<[u8; 2]> for Publisher {
                 ));
             }
         };
-        Ok(Publisher::create_new(value[0], value[1], name))
+        Ok(Licensee {
+            name,
+            code: LicenseeCode::New(value[0], value[1]),
+        })
     }
 }

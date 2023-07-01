@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use lib_jayboy::*;
 
 pub const NINTENDO_LOGO_BYTES: [u8; 48] = [
@@ -7,11 +7,18 @@ pub const NINTENDO_LOGO_BYTES: [u8; 48] = [
     0xBB, 0xBB, 0x67, 0x63, 0x6E, 0x0E, 0xEC, 0xCC, 0xDD, 0xDC, 0x99, 0x9F, 0xBB, 0xB9, 0x33, 0x3E,
 ];
 
-pub fn validate_nintendo_logo(cart: &Cartridge) -> anyhow::Result<()> {
+pub fn validate_logo_bytes(cart: &Cartridge) -> Result<&[u8]> {
     if cart.logo_bytes().eq(&NINTENDO_LOGO_BYTES) {
-        Ok(())
+        Ok(cart.logo_bytes())
     } else {
-        Err(anyhow!("Invalid Nintendo Logo"))
+        Err(anyhow!("Invalid Logo Bytes"))
+    }
+}
+
+pub fn validate_title(cart: &Cartridge) -> Result<GBText> {
+    match cart.title() {
+        Some(title) => Ok(title),
+        None => Err(anyhow!("Invalid Title")),
     }
 }
 
@@ -41,7 +48,7 @@ pub fn validate_ram_size_vs_cartridge_type(cart: &Cartridge) -> anyhow::Result<(
 /// ```
 pub fn generate_header_checksum(cart: &Cartridge) -> u8 {
     let mut checksum: u8 = 0;
-    let bytes = cart.get_bytes();
+    let bytes = cart.bytes.as_ref();
     assert!(bytes.len() >= 0x014C);
     for address in 0x0134..=0x014C_u16 {
         let byte = bytes[address as usize];
@@ -54,7 +61,7 @@ pub fn generate_header_checksum(cart: &Cartridge) -> u8 {
 /// These bytes contain a 16-bit (big-endian) checksum simply computed as the sum of all the bytes of the cartridge ROM (except these two checksum bytes).
 pub fn generate_global_checksum(cart: &Cartridge) -> u16 {
     let mut checksum: u16 = 0;
-    let bytes = cart.get_bytes();
+    let bytes = cart.bytes.as_ref();
     assert!(bytes.len() >= 0x14D);
     // TODO: Is this for the entire ROM (as in _every_ other byte) or just this range below?
     for byte in bytes[0x0100..=0x14D].iter() {
@@ -65,7 +72,7 @@ pub fn generate_global_checksum(cart: &Cartridge) -> u16 {
 
 pub fn validate_cart(cart: &Cartridge) -> anyhow::Result<()> {
     // validate the logo
-    validate_nintendo_logo(cart)?;
+    validate_logo_bytes(cart)?;
     validate_ram_size_vs_cartridge_type(cart)?;
     let checksum = generate_header_checksum(cart);
     if checksum != cart.header_checksum() {

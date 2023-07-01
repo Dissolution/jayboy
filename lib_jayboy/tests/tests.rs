@@ -5,6 +5,7 @@ use std::path::PathBuf;
 mod cart_tests;
 
 fn get_rom_files() -> Vec<PathBuf> {
+    // Change this for your tests!
     let path = r"c:\gb_roms\";
 
     let gb_rom_paths = fs::read_dir(path)
@@ -26,28 +27,14 @@ fn get_rom_files() -> Vec<PathBuf> {
 }
 
 #[test]
-pub fn test_one_rom() {
-    let file = r"c:\gb_roms\Tetris (Japan) (En).gb";
-    println!("Testing {:?}", file);
-    let load_cart = Roms::load_cartridge(file);
-    println!("Loaded: {:?}", load_cart);
-    if let Ok(cart) = load_cart {
-        println!("Loaded Cart {}", cart.title());
-        let tests = cart_tests::validate_cart(&cart);
-        println!("Cart Tests: {:?}", tests);
-        println!("DEBUG");
-    }
-}
-
-#[test]
 pub fn test_all_roms() {
     let gb_rom_paths = get_rom_files();
     for file in gb_rom_paths.iter() {
         println!("Testing {:?}", file);
-        let load_cart = Roms::load_cartridge(file);
+        let load_cart = Cartridge::load_from(file);
         println!("Loaded: {:?}", load_cart);
         if let Ok(cart) = load_cart {
-            println!("Loaded Cart {}", cart.title());
+            println!("Loaded Cart {:?}", cart.title());
             let tests = cart_tests::validate_cart(&cart);
             println!("Cart Tests: {:?}", tests);
             println!("DEBUG");
