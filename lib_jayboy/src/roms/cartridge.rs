@@ -44,7 +44,6 @@ impl Cartridge {
         &self.bytes[0x0100..=0x0103]
     }
 
-    
     /// ## `0x0104-0x0133` -- Nintendo Logo
     /// This area contains a 'bitmap' image that is displayed when the Game Boy powers on.
     /// It must match a specific 48 bytes, the same as in the BOOT ROM, or the game will not run.
@@ -186,8 +185,9 @@ impl Cartridge {
         let byte = self.bytes[0x0149];
         match byte {
             0x00 => 0,
-            // as per Pan Docs, this was never used
-            // except per PD (public domain homebrew files) (check?)
+            // as per Pan Docs, this value was never used
+            // except per PD (public domain homebrew files)
+            // TODO: VERIFY
             0x01 => 2 * 1024,
             0x02 => 8 * 1024,
             0x03 => 32 * 1024,
@@ -201,7 +201,9 @@ impl Cartridge {
     }
 
     /// ## `0x14A` -- Destination code
-    /// This byte specifies whether this version of the game is intended to be sold in Japan or elsewhere.
+    /// This byte specifies whether this version of the game is intended to be sold in
+    /// Japan or Overseas.  
+    /// Note: `Overseas` cartridges were also sold in `Japan` ¯\_(ツ)_/¯
     pub fn destination(&self) -> Destination {
         let byte = self.bytes[0x014A];
         match byte {
@@ -225,7 +227,11 @@ impl Cartridge {
         if let Ok(licensee) = licensee {
             Some(licensee)
         } else {
-            warn!("Unknown old licensee: 0x{:0>2X} {:?}", byte, self.name);
+            warn!(
+                "Unknown old licensee: {} {:?}",
+                GByte::from(byte),
+                self.name
+            );
             None
         }
     }

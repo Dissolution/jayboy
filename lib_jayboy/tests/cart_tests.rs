@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anyhow::{anyhow, Result};
 use lib_jayboy::*;
 
@@ -22,7 +24,17 @@ pub fn validate_title(cart: &Cartridge) -> Result<GBText> {
     }
 }
 
-pub fn validate_ram_size_vs_cartridge_type(cart: &Cartridge) -> anyhow::Result<()> {
+pub fn validate_rom_size(cart: &Cartridge) -> Result<()> {
+    let rom_size = cart.rom_size();
+    let cart_size = cart.bytes.len();
+    if rom_size == cart_size {
+        Ok(())
+    } else {
+        Err(anyhow!("Cart Size does not match Rom Size"))
+    }
+}
+
+pub fn validate_ram_size(cart: &Cartridge) -> Result<()> {
     // If the cartridge type does not include “RAM” in its name, this should be set to 0.
     // This includes MBC2, since its 512 × 4 bits of memory are built directly into the mapper.
     let has_ram = cart.cartridge_type().ram;
@@ -36,6 +48,15 @@ pub fn validate_ram_size_vs_cartridge_type(cart: &Cartridge) -> anyhow::Result<(
         ))
     } else {
         Ok(())
+    }
+}
+
+pub fn validate_destination(cart: &Cartridge) -> Result<()> {
+    let byte = cart.bytes[0x014A];
+    if byte == 0x00 || byte == 0x01 {
+        Ok(())
+    } else {
+        Err(anyhow!("Invalid Destination Byte: {}", GByte::from(byte)))
     }
 }
 
@@ -70,10 +91,10 @@ pub fn generate_global_checksum(cart: &Cartridge) -> u16 {
     checksum
 }
 
-pub fn validate_cart(cart: &Cartridge) -> anyhow::Result<()> {
+pub fn validate_cart(cart: &Cartridge) -> Result<()> {
     // validate the logo
     validate_logo_bytes(cart)?;
-    validate_ram_size_vs_cartridge_type(cart)?;
+    validate_ram_size(cart)?;
     let checksum = generate_header_checksum(cart);
     if checksum != cart.header_checksum() {
         return Err(anyhow!("Invalid Header Checksum"));

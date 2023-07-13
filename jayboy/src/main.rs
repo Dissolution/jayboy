@@ -1,16 +1,21 @@
 #![allow(dead_code, unused)]
 
+mod rom_scanner;
+
 extern crate core;
 #[macro_use]
 extern crate log;
 extern crate simplelog;
 use simplelog::*;
 
+use crate::rom_scanner::RomScanner;
 use anyhow::anyhow;
 use lib_jayboy::*;
 use rand::prelude::*;
 use std::fs;
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -41,6 +46,8 @@ fn main() {
     // }
 
     //let file = r"c:\gb_roms\Tetris (Japan) (En).gb";
+
+    let scan_result = RomScanner::scan_roms();
 
     //let mut rand = ThreadRng::default();
     let mut files = get_rom_files().unwrap();
@@ -73,7 +80,7 @@ fn main() {
 
 fn display_dmg_rom() -> anyhow::Result<()> {
     let cart = Cartridge::load_from(&"./files/DMG_ROM.bin".to_string())?;
-    let bytes = cart.get_bytes();
+    let bytes = cart.bytes;
 
     // Show them!
     println!("Idx:  _u8  0x_");
@@ -102,4 +109,18 @@ pub fn get_rom_files() -> anyhow::Result<Vec<PathBuf>> {
         })
         .collect::<Vec<PathBuf>>();
     Ok(file_paths)
+}
+
+pub fn load_rom_memory<P: AsRef<Path>>(path: P) -> anyhow::Result<VecMemory> {
+    let path = path.as_ref();
+    let file_name = path
+        .file_name()
+        .ok_or(anyhow!("Invalid Path File Name: {}", path.display()))?;
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let mut buffer = Vec::new();
+
+    // Read the entire ROM
+    reader.read_to_end(&mut buffer)?;
+    Ok(VecMemory::new(buffer))
 }

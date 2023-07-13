@@ -1,9 +1,9 @@
-use crate::{Memory, Registers, Timer};
+use crate::{Registers, Timer, VecMemory};
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct CPU {
     pub registers: Registers,
-    pub memory: Memory,
+    pub memory: VecMemory,
     pub timer: Timer,
 }
 
@@ -11,7 +11,7 @@ impl CPU {
     pub fn new() -> Self {
         CPU {
             registers: Registers::default(),
-            memory: Memory::new(),
+            memory: VecMemory::default(),
             timer: Timer::default(),
         }
     }

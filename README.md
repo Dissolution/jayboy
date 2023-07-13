@@ -18,6 +18,10 @@ Another `rust` Game Boy™️ emulator, this time written by me!
 - [Game Boy: Complete Technical Reference](https://gekkio.fi/files/gb-docs/gbctr.pdf)
 - [IronBoy](https://nicolas-siplis.com/ironboy/)
 - [Game Boy Opcodes](https://meganesulli.com/blog/game-boy-opcodes/)
+- [gbz80(7) CPU opcode reference](https://rgbds.gbdev.io/docs/v0.6.1/gbz80.7/)
+- [Game Boy CPU (SM83) Instruction Set](https://rgbds.gbdev.io/docs/v0.6.1/gbz80.7/)
+  - [JSON](https://gbdev.io/gb-opcodes/Opcodes.json)
+- [Game Boy CPU Instructions](https://meganesu.github.io/generate-gb-opcodes/)
 
 ##### Projects
 - [RBoy](https://github.com/mvdnes/rboy) -- A Game Boy Color Emulator written in Rust

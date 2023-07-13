@@ -1,3 +1,5 @@
+use crate::cpu_flags::CpuFlags;
+
 #[derive(Debug, Default, Eq, PartialEq)]
 pub struct Registers {
     /// Accumulator
@@ -23,36 +25,6 @@ pub struct Registers {
     /// Program Counter
     /// This tells the CPU where to read the next instruction from Memory
     pub pc: u16,
-}
-
-#[allow(unused_imports)] // This _is_ used
-use bitflags::{bitflags, Flags};
-
-bitflags! {
-    /// CPU Flags
-    /// _note: lower 4 bits are unused_
-    #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    pub struct CpuFlags: u8 {
-        /// zero
-        const Z = 0b10000000;
-        /// subtraction
-        const S = 0b01000000;
-        /// half carry
-        const H = 0b00100000;
-        /// carry
-        const C = 0b00010000;
-    }
-}
-
-impl From<u8> for CpuFlags {
-    fn from(value: u8) -> Self {
-        CpuFlags::from_bits_truncate(value)
-    }
-}
-impl From<CpuFlags> for u8 {
-    fn from(value: CpuFlags) -> Self {
-        value.bits()
-    }
 }
 
 impl Registers {

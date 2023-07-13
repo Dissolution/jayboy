@@ -1,4 +1,3 @@
-use anyhow::{anyhow, Result};
 use std::fmt::{Debug, Display, Formatter, LowerHex, Result as FmtResult, UpperHex};
 
 /// A thin wrapper around `u8` for better debugging support
