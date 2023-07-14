@@ -1,6 +1,6 @@
-use crate::native::{GBText, GByte};
 use crate::roms::Licensee;
 use crate::roms::*;
+use crate::{gb_str, gb_u16, gb_u8};
 use anyhow::{anyhow, Result};
 use std::ffi::OsStr;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -38,6 +38,14 @@ impl Cartridge {
 
 // instance methods
 impl Cartridge {
+    pub fn header_bytes(&self) -> &[u8] {
+        &self.bytes[0x0100..=0x014F]
+    }
+
+    pub fn non_header_bytes(&self) -> &[u8] {
+        &self.bytes[0x0150..]
+    }
+
     /// ## `0x0100-0x0103` -- Entry Point
     /// After executing the boot ROM, the Game Boy will start executing at position `0x0100`
     pub fn entry_point(&self) -> &[u8] {
@@ -55,7 +63,7 @@ impl Cartridge {
     /// These bytes contain the game's name in ASCII.  
     /// If the title is less than 16 characters, the remaining bytes should be empty padding bytes (`0x00`)  
     /// Parts of this field may have different meanings in later cartridges, reducing the size to 15 or even 11 bytes.
-    pub fn title(&self) -> Option<GBText> {
+    pub fn title(&self) -> Option<gb_str> {
         // calculate title length
 
         let title_length = if self.manufacturer_code().is_some() {
@@ -77,7 +85,7 @@ impl Cartridge {
             .unwrap_or(16);
 
         let str_bytes = &title_bytes[0..=last_index];
-        let str_result = GBText::from_ascii(str_bytes);
+        let str_result = gb_str::try_from_ascii(str_bytes);
         match str_result {
             Ok(text) => Some(text),
             Err(ex) => {
@@ -96,9 +104,9 @@ impl Cartridge {
     /// In older carts, these bytes are part of `Title`.  
     /// In newer carts, they contain a manufacturer code (4 uppercase ASCII letters).  
     /// The purpose for this is unknown.
-    pub fn manufacturer_code(&self) -> Option<GBText> {
+    pub fn manufacturer_code(&self) -> Option<gb_str> {
         let bytes = &self.bytes[0x013F..=0x142];
-        let str_result = GBText::from_uppercase_ascii(bytes);
+        let str_result = gb_str::try_from_uppercase_ascii(bytes);
         match str_result {
             Ok(text) => Some(text),
             Err(ex) => {
@@ -144,7 +152,7 @@ impl Cartridge {
             0x03 => true,
             0x00 => false,
             _ => {
-                info!("Non-typical SGB support byte: {}", GByte::from(byte));
+                info!("Non-typical SGB support byte: {}", gb_u8::from(byte));
                 false
             }
         }
@@ -158,7 +166,7 @@ impl Cartridge {
         if let Ok(cart_type) = CartridgeType::try_from(byte) {
             cart_type
         } else {
-            error!("Unknown Cart Type: {} {:?}", GByte::from(byte), self.name);
+            error!("Unknown Cart Type: {} {:?}", gb_u8::from(byte), self.name);
             //CartridgeType::default()
             panic!("UNKNOWN CART TYPE")
         }
@@ -175,7 +183,7 @@ impl Cartridge {
             0x52 => (1024 + 128) * 1024,
             0x53 => (1024 + 256) * 1024,
             0x54 => (1024 + 512) * 1024,
-            _ => panic!("Unknown ROM size byte: {}", GByte::from(byte)),
+            _ => panic!("Unknown ROM size byte: {}", gb_u8::from(byte)),
         }
     }
 
@@ -194,7 +202,7 @@ impl Cartridge {
             0x04 => 128 * 1024,
             0x05 => 64 * 1024,
             _ => {
-                error!("Unknown RAM size byte: {}", GByte::from(byte));
+                error!("Unknown RAM size byte: {}", gb_u8::from(byte));
                 0
             }
         }
@@ -210,7 +218,7 @@ impl Cartridge {
             0x00 => Destination::Japan,
             0x01 => Destination::Overseas,
             _ => {
-                error!("Unknown Destination code byte: {}", GByte::from(byte));
+                error!("Unknown Destination code byte: {}", gb_u8::from(byte));
                 Destination::Overseas
             }
         }
@@ -229,7 +237,7 @@ impl Cartridge {
         } else {
             warn!(
                 "Unknown old licensee: {} {:?}",
-                GByte::from(byte),
+                gb_u8::from(byte),
                 self.name
             );
             None

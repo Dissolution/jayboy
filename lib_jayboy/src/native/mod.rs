@@ -1,7 +1,9 @@
-mod gbtext;
-mod gbyte;
-mod gbytes;
+mod gbi8;
+mod gbstr;
+mod gbu16;
+mod gbu8;
 
-pub use gbtext::*;
-pub use gbyte::*;
-pub use gbytes::*;
+pub use gbi8::*;
+pub use gbstr::*;
+pub use gbu16::*;
+pub use gbu8::*;

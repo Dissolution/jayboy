@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 //#[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -19,8 +21,8 @@ mod timer;
 
 pub use cpu::*;
 pub use cpu_flags::*;
-pub use instructions::*;
 pub use formatting::*;
+pub use instructions::*;
 pub use memory::*;
 pub use native::*;
 pub use opcodes::*;

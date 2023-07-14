@@ -45,9 +45,18 @@ fn main() {
     //     //opcode = bytes[cpu.registers.PC];
     // }
 
-    //let file = r"c:\gb_roms\Tetris (Japan) (En).gb";
+    let file = r"c:\gb_roms\Tetris (Japan) (En).gb";
+    let mut cart = Cartridge::load_from(&file).unwrap();
+    let non_header_bytes = cart.non_header_bytes();
+    let instruction_positions = InstructionReader::try_parse(non_header_bytes).unwrap();
+    for instruction_position in instruction_positions.iter() {
+        println!("{}", instruction_position);
+        let pos = &instruction_position.0;
+        let instruction = &instruction_position.1;
+        println!("pause");
+    }
 
-    let scan_result = RomScanner::scan_roms();
+    let scan_result = RomScanner::scan_entry_points();
 
     //let mut rand = ThreadRng::default();
     let mut files = get_rom_files().unwrap();
